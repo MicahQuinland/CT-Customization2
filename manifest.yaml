@@ -12,6 +12,8 @@ resources:
     deployment_targets:
       accounts: # :type: list
         - 487444142318
+      organizational_units:
+        - Security
     export_outputs:
       - name: /org/member/test-ssm/app-id
         value: $[output_ApplicationId]
@@ -29,10 +31,9 @@ resources:
         parameter_value: EnvNum2
     deploy_method: stack_set
     deployment_targets:
-      accounts:
-        - 487444142318
       organizational_units:
-        - ou-tzf9-wzx1yzyb
+        - Security
+        - NonRootOU
     regions: # :type: list
       - us-east-1
 
