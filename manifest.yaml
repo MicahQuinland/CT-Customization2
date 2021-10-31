@@ -19,6 +19,7 @@ resources:
       - us-east-1
 
   - name: stackset-2
+    resource_file: templates/create-ssm-parameter-keys-2.template
     parameters:
       - parameter_key: ApplicationId
         parameter_value: App2
