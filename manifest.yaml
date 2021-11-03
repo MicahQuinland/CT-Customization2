@@ -46,4 +46,3 @@ resources:
     deployment_targets: # accounts property is not supported for SCPs
       organizational_units:
         - Security
-        - Root
