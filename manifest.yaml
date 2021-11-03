@@ -46,5 +46,4 @@ resources:
     deployment_targets: # accounts property is not supported for SCPs
       organizational_units:
         - Security
-      accounts: # :type: list
-        - 898793495627
+        - Root
