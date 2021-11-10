@@ -14,6 +14,7 @@ resources:
         - 487444142318
       organizational_units:
         - Security
+        - Nov10Demo
     export_outputs:
       - name: /org/member/test-ssm/app-id
         value: $[output_ApplicationId]
@@ -35,6 +36,7 @@ resources:
         - 487444142318
       organizational_units:
         - Security
+        - Nov10Demo
     regions: # :type: list
       - us-east-1
 
@@ -46,6 +48,7 @@ resources:
     deployment_targets: # accounts property is not supported for SCPs
       organizational_units:
         - Security
+        - Nov10Demo
         
   # ControlTower Config Rule - Additional Detective Guardrails
   - name: rotate-access-keys-guardrail
@@ -57,5 +60,6 @@ resources:
     deployment_targets:
       organizational_units:
         - Security
+        - Nov10Demo
     regions:
       - us-east-1
