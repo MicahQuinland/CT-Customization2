@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Deletes default networking from new and existing accounts
+
+Parameters:
+  pS3SourceBucket:
+    Type: String
+    Description: S3 bucket containing zip file for lambda function
+    Default: micahlambdavpctest
+
+  pLambdaZipFileName:
+    Type: String
+    Description: Lambda zip file containing code
+    Default: default-vpc-cleanup.zip
+
+  pRoleToAssume:
+    Type: String
+    Default: AWSControlTowerExecution
+    Description: >
+      IAM role to be assumed in child accounts to delete networking.
+
+  pLambdaFunctionName:
+    Type: String
+    Description: Lambda function name
+    Default: VPCremovalTest
+
+  pOrganizationId:
+    Type: String
+    Description: Organization ID
+    Default: o-tud5wigmko
+
+  pTagKey1:
+    Type: String
+    Description: Tag key
+    Default: Test
+
+  pTagValue1:
+    Type: String
+    Description: Tag key value
+    Default: Test
+
+Resources:
+  rLambda:
+    Type: AWS::Lambda::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W58
+            reason: CloudWatch logs permissions provided by the role
+    Properties:
+      Description: Delete default network resources
+      FunctionName: !Ref pLambdaFunctionName
+      Handler: "app.lambda_handler"
+      Role: !GetAtt rLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref pS3SourceBucket
+        S3Key: !Ref pLambdaZipFileName
+      Runtime: "python3.8"
+      MemorySize: 512
+      Timeout: 900
+      Tags:
+        - Key: !Ref pTagKey1
+          Value: !Ref pTagValue1
+      ReservedConcurrentExecutions: 2
+      Environment:
+        Variables:
+          EXECUTION_ROLE_NAME: !Ref pRoleToAssume
+
+  rLambdaRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: organizations:ListAccounts and DescribeAccount do not support resource restriction
+          - id: W28
+            reason: Explicit name used for restricting access to only the cross-account role
+    Properties:
+      RoleName: !Sub ${pLambdaFunctionName}-Role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: default-vpc-cleanup-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: Ec2DescribeRegion
+                Effect: Allow
+                Action:
+                  - ec2:DescribeRegions
+                Resource: "*"
+
+              - Sid: KmsDecrypt
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringLike:
+                    'kms:RequestAlias': alias/aws/lambda
+
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+              - Sid: StsAssume
+                Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource: !Sub arn:${AWS::Partition}:iam::*:role/${pRoleToAssume}
+                Condition:
+                  StringEquals:
+                    "aws:PrincipalOrgId": !Ref pOrganizationId
+
+              - Sid: OrganizationsReadAccess
+                Effect: Allow
+                Action:
+                  - organizations:DescribeOrganization
+                  - organizations:ListAccounts
+                Resource: "*"
+
+## Trigger on 1st run for existing accounts
+  rLambdaCustomResource:
+    Type: Custom::LambdaCustomResource
+    Properties:
+      ServiceToken: !GetAtt rLambda.Arn
+      Version: "1.0"
+
+## Trigger for new accounts
+  rControlTowerLifeCycleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: cct-securityhub-enabler
+      Description: "SecurityHubLifeCycleTrigger"
+      EventPattern:
+        source:
+          - "aws.controltower"
+        detail-type:
+          - "AWS Service Event via CloudTrail"
+        detail:
+          eventName:
+            - "CreateManagedAccount"
+      State: "ENABLED"
+      Targets:
+        - Arn: !GetAtt rLambda.Arn
+          Id: "NetworkDefaultCleanup"
+
+  rPermissionForCTRuleToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt rLambda.Arn
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt rControlTowerLifeCycleRule.Arn
